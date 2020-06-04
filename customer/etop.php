@@ -26,7 +26,26 @@ function etop_get() {
     curl_close($curl);
 
     try {
-        return json_decode($response, true);
+        $result = [];
+        $data = json_decode($response, true);
+
+        foreach($data['provinces'] as $province) {
+            $province_name = ($province['name']);
+            $province_name_san = sanitize_name($province['name']);
+
+            foreach($province['districts'] as $district) {
+                $district_name = ($district['name']);
+                $district_name_san = sanitize_name($district['name']);
+
+                foreach($district['wards'] as $ward) {
+                    $ward_name = $ward['name'];
+                    $ward_name_san = sanitize_name($ward['name']);
+                    $result["$province_name_san/$district_name_san/$ward_name_san"] = "$province_name/$district_name/$ward_name";
+                }
+            }
+        }
+
+        return $result;
     } catch (Exception $ex) {
         echo date('Y-m-d H:i:s') . ": " . $ex->getMessage() . "\r\n";
         return null;
