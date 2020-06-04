@@ -1,7 +1,7 @@
 <?php
 
 function read_jnt_address() {
-    $path = __DIR__.'/jnt.csv';
+    $path = __DIR__ . '/jnt.csv';
     if (!file_exists($path)) {
         echo "File $path not exists\r\n";
         exit;
@@ -11,11 +11,16 @@ function read_jnt_address() {
     $file = fopen($path, 'rb');
     $row = fgetcsv($file);
 
-    while($row = fgetcsv($file)) {
+    while ($row = fgetcsv($file)) {
         $province_san = sanitize_name($row[1]);
         $district_san = sanitize_name($row[2]);
         $ward_san = sanitize_name($row[3]);
-        $jnt_add["$province_san/$district_san/$ward_san"] = $row[0]."/".$row[3];
+        $jnt_add["$province_san/$district_san/$ward_san"] = $row[0] . "/" . $row[1] . "/" . $row[2] . "/" . $row[3];
+
+        if (!isset($result["$province_san/$district_san/"]))
+            $result["$province_san/$district_san/"] = [];
+
+        $jnt_add["$province_san/$district_san/"][] = $row[0] . "/" . $row[1] . "/" . $row[2] . "/" . $row[3];
     }
 
     return $jnt_add;
@@ -46,6 +51,7 @@ function sanitize_name($string) {
         '^xã',
         '^phường',
         '^thị trấn',
+        '^huyện đảo',
         '^huyện',
         '^quận',
         '^thị xã',
@@ -62,6 +68,10 @@ function sanitize_name($string) {
             break;
         }
     }
+
+    $string = preg_replace("/\u{00A0}$/u", '', $string);
+    $string = trim($string, " \t\n\r\0\x0B-_—");
+    $string = name_exception($string);
 
     $string = khongdau($string);
     $string = mb_eregi_replace('-[0-9a-zàáãạảăắằẳẵặâấầẩẫậèéẹẻẽêềếểễệđìíĩỉịòóõọỏôốồổỗộơớờởỡợùúũụủưứừửữựỳỵỷỹýÀÁÃẠẢĂẮẰẲẴẶÂẤẦẨẪẬÈÉẸẺẼÊỀẾỂỄỆĐÌÍĨỈỊÒÓÕỌỎÔỐỒỔỖỘƠỚỜỞỠỢÙÚŨỤỦƯỨỪỬỮỰỲỴỶỸÝ]+$', '', $string);
@@ -81,32 +91,106 @@ function sanitize_name($string) {
     return $string;
 }
 
+function name_exception($name) {
+    if ($name === 'krông păk' || $name === 'krông pắk') {
+        return 'krông pắc';
+    }
+
+    return $name;
+}
+
 function mapping($their) {
     $our = "";
 
     return $our;
 }
 
-function loop($jnt_array, $customer_array) {
+function loop($jnt_address, &$customer_address) {
     $count = 0;
-    foreach ($jnt_array as $key => $value) {
-        if (isset($customer_array[$key])) {
-//            var_dump($customer_array[$key]);
-        } else {
-            var_dump($key);
+    foreach ($jnt_address as $key => $value) {
+        if (!isset($customer_address[$key])) {
+            echo "NOT FOUND: >>>> $key <<<<\r\n\r\n";
+            $new_key_arr = explode('/', $key);
+            $new_key = implode('/', [$new_key_arr[0], $new_key_arr[1]]) . "/";
+            if (isset($customer_address[$new_key])) {
+                $i = 0;
+                foreach ($customer_address[$new_key] as $index => $maybe) {
+                    echo "[$i] $maybe [$i]\r\n";
+                    ++$i;
+                }
+
+                echo "Choose a ward for mapping: ";
+                $handle = fopen("php://stdin", "r");
+                $line = fgets($handle);
+                $line = trim($line);
+
+                if ($line === "break") break;
+
+                if ($line && isset($customer_address[$new_key][$line])) {
+                    echo $customer_address[$new_key][$line] . "\r\n";
+
+                    $customer_address[$key] = $customer_address[$new_key][$line];
+                } else {
+                    $customer_address[$key] = "__BLANK__";
+                }
+                fclose($handle);
+
+                echo "\r\n";
+            }
+
             $count++;
         }
     }
 
     var_dump($count);
-
-    $result = [];
-
-    return $result;
 }
 
-function export($result) {
+function check($jnt_address, $customer_address) {
+    $count = 0;
+    foreach ($jnt_address as $key => $value) {
+        if (!isset($customer_address[$key]) && is_string($value)) {
+            echo "NOT FOUND: >>>> " . $jnt_address[$key] . "( " . $value . " )" . " <<<<\r\n\r\n";
+            $count++;
+        }
+    }
 
+    var_dump($count);
+}
+
+function export($customer_name, $jnt_address, $customer_address) {
+    $path = __DIR__ . "/files/" . $customer_name . "_mapping." . date('Y-m-d-H-i-s') . ".csv";
+    $file = fopen($path, 'w+b');
+    $count = 0;
+    foreach ($jnt_address as $key => $value) {
+        if (!is_string($value)) continue;
+
+        $row = [];
+
+        $split = explode('/', $value);
+
+        if (!isset($customer_address[$key])) {
+            echo "NOT FOUND: >>>> " . $jnt_address[$key] . "( " . $value . " )" . " <<<<\r\n\r\n";
+            $split_ = ["__BLANK__", "__BLANK__", "__BLANK__"];
+
+            $count++;
+        } else {
+            $split_ = explode('/', $customer_address[$key]);
+
+            if (!$row) {
+                var_dump($value);
+                var_dump($customer_address[$key]);
+            }
+        }
+
+        if ($split && $split_) {
+            $row = array_merge($split, $split_);
+        }
+
+        if ($row) fputcsv($file, $row);
+    }
+    fclose($file);
+
+    var_dump($count);
 }
 
 function get_customer_address($name) {

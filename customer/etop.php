@@ -40,6 +40,11 @@ function etop_get() {
                 foreach($district['wards'] as $ward) {
                     $ward_name = $ward['name'];
                     $ward_name_san = sanitize_name($ward['name']);
+
+                    if (!isset($result["$province_name_san/$district_name_san/"]))
+                        $result["$province_name_san/$district_name_san/"] = [];
+
+                    $result["$province_name_san/$district_name_san/"][] = "$province_name/$district_name/$ward_name";
                     $result["$province_name_san/$district_name_san/$ward_name_san"] = "$province_name/$district_name/$ward_name";
                 }
             }
